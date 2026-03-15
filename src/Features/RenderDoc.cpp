@@ -12,6 +12,7 @@
 #include <imgui.h>
 
 // Include the real RenderDoc API and Windows headers only in the implementation
+#include "Features/LightLimitFix.h"
 #include <Renderdoc/renderdoc_app.h>
 #include <algorithm>
 #include <chrono>
@@ -776,6 +777,17 @@ std::string RenderDoc::BuildAutomaticCaptureComments(const std::string& userComm
 		comments += "Enabled Features:\n";
 		for (const auto& feature : enabledFeatures) {
 			comments += std::format("- {}\n", feature);
+		}
+	}
+
+	// If shadow slot index visualization (mode 8) is active, embed the color legend so
+	// RenderDoc captures carry a self-contained slot→color key for debugging.
+	auto& llf = globals::features::lightLimitFix;
+	if (llf.settings.EnableLightsVisualisation && llf.settings.LightsVisualisationMode == 8) {
+		std::string legend = llf.BuildShadowSlotColorLegend();
+		if (!legend.empty()) {
+			comments += "\n";
+			comments += legend;
 		}
 	}
 
