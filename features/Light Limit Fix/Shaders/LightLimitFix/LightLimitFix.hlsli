@@ -21,7 +21,7 @@ namespace LightLimitFix
 	{
 		const uint3 clusterSize = SharedData::lightLimitFixSettings.ClusterSize.xyz;
 
-		if (!FrameBuffer::FrameParams.y) // Fix first person lights
+		if (!FrameBuffer::FrameParams.y)  // Fix first person lights
 			uv = 0.5;
 
 		z = max(z, SharedData::CameraData.y);
@@ -36,7 +36,6 @@ namespace LightLimitFix
 		clusterIndex = cluster.x + (clusterSize.x * cluster.y) + (clusterSize.x * clusterSize.y * cluster.z);
 		return true;
 	}
-
 
 	bool IsLightIgnored(Light light)
 	{
