@@ -1029,15 +1029,22 @@ void Upscaling::ConfigureTAA()
 {
 	auto upscaleMethod = GetUpscaleMethod();
 
+	// When no upscaling method is active, leave vanilla TAA state untouched.
+	// The original UpdateJitter (called after this) manages water TAA and jitter
+	// correctly for the non-upscaling case.  Overriding here disables ISWaterBlend,
+	// removing the 95% temporal history blend that stabilizes water reflections.
+	if (upscaleMethod == UpscaleMethod::kNONE)
+		return;
+
 	auto imageSpaceManager = RE::ImageSpaceManager::GetSingleton();
 	GET_INSTANCE_MEMBER(BSImagespaceShaderISTemporalAA, imageSpaceManager);
 
-	// Disable water TAA when upscaling is enabled
+	// CS TAA replaces vanilla TAA entirely, so disable water TAA (CS handles it).
+	// For FSR/DLSS, keep water TAA enabled since the upscaler needs the blend data.
 	bool* enableWaterTAA = reinterpret_cast<bool*>(reinterpret_cast<uintptr_t>(BSImagespaceShaderISTemporalAA) + 0x38LL);
-	*enableWaterTAA = !(upscaleMethod == UpscaleMethod::kNONE || upscaleMethod == UpscaleMethod::kTAA);
+	*enableWaterTAA = (upscaleMethod != UpscaleMethod::kTAA);
 
-	// Force enable TAA if needed
-	BSImagespaceShaderISTemporalAA->taaEnabled = upscaleMethod != UpscaleMethod::kNONE;
+	BSImagespaceShaderISTemporalAA->taaEnabled = true;
 }
 
 void Upscaling::ConfigureUpscaling(RE::BSGraphics::State* a_viewport)
@@ -1827,14 +1834,20 @@ void Upscaling::Main_PostProcessing::thunk(RE::ImageSpaceManager* a_this, uint32
 	if (upscaleMethod == UpscaleMethod::kDLSS)
 		upscaling.ApplySharpening();
 
-	auto imageSpaceManager = RE::ImageSpaceManager::GetSingleton();
-	GET_INSTANCE_MEMBER(BSImagespaceShaderISTemporalAA, imageSpaceManager);
+	// When no upscaler is active, don't override TAA state — let vanilla
+	// post-processing (including ISWaterBlend) run with its own TAA settings.
+	if (upscaleMethod == UpscaleMethod::kNONE) {
+		func(a_this, a3, a_target, a_4, a_5);
+	} else {
+		auto imageSpaceManager = RE::ImageSpaceManager::GetSingleton();
+		GET_INSTANCE_MEMBER(BSImagespaceShaderISTemporalAA, imageSpaceManager);
 
-	BSImagespaceShaderISTemporalAA->taaEnabled = upscaleMethod == UpscaleMethod::kTAA;
+		BSImagespaceShaderISTemporalAA->taaEnabled = upscaleMethod == UpscaleMethod::kTAA;
 
-	func(a_this, a3, a_target, a_4, a_5);
+		func(a_this, a3, a_target, a_4, a_5);
 
-	BSImagespaceShaderISTemporalAA->taaEnabled = false;
+		BSImagespaceShaderISTemporalAA->taaEnabled = false;
+	}
 }
 
 void Upscaling::SetScissorRect::thunk(RE::BSGraphics::Renderer* This, int a_left, int a_top, int a_right, int a_bottom)
